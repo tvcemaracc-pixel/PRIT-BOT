@@ -1,0 +1,31 @@
+import os, requests
+from flask import Flask, request
+app = Flask(__name__)
+
+WHAPI_TOKEN = os.getenv("WHAPI_TOKEN")
+PINATA_JWT = os.getenv("PINATA_JWT")
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.json
+    msg = data["messages"][0]
+    from_number = msg["from"]
+    
+    if "image" in msg:
+        media_url = msg["image"]["link"]
+        file = requests.get(media_url, headers={"Authorization": f"Bearer {WHAPI_TOKEN}"})
+        headers = {"Authorization": f"Bearer {PINATA_JWT}"}
+        files = {"file": ("laporan.jpg", file.content)}
+        res = requests.post("https://api.pinata.cloud/pinning/pinFileToIPFS", headers=headers, files=files)
+        ipfs_hash = res.json()["IpfsHash"]
+        link = f"https://gateway.pinata.cloud/ipfs/{ipfs_hash}"
+        reply = f"✅ Laporan diterima raja!\nBukti: {link}"
+    else:
+        reply = "Kirim foto bukti pelanggaran ya raja 👑"
+    
+    requests.post("https://gate.whapi.cloud/messages/text", 
+        headers={"Authorization": f"Bearer {WHAPI_TOKEN}", "Content-Type": "application/json"},
+        json={"to": from_number, "body": reply})
+    return "ok"
+
+if __name__ == '__main__': app.run(host='0.0.0.0', port=10000)
